@@ -88,9 +88,10 @@ sam local invoke geoDeleteItemFunction --event events/geo-event-delete-item.json
 ```
 
 ### Frontend Development
-To run the local frontend, navigate into the frontend directory and run:
+To run the local frontend, navigate into the frontend directory and run (second command should launch local iphone simulator):
 ```bash
-npx react-native run-ios
+npm install
+npx react-native run-ios 
 ```
 *Note: For the functions to work properly in local simulation, you will need two local APIs running: a Lambda API (sam local start-lambda) and an API Gateway (sam local start-api*
 
