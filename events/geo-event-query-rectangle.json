@@ -1,0 +1,5 @@
+{
+  "httpMethod": "GET",
+  "path": "/geo",
+  "body": "{\"lat1\": 36.879163, \"lon1\": 10.243122, \"lat2\": 36.889163, \"lon2\": 10.253122, \"QueryFilters\": {\"FilterExpression\": \"Capital = :val1 AND District = :val2\", \"ExpressionAttributeValues\": {\":val1\": {\"S\": \"Moscow\"}, \":val2\": {\"S\": \"Russia\"}}}}"
+}

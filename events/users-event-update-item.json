@@ -1,0 +1,4 @@
+{
+    "httpMethod": "PATCH",
+    "body": "{\"username\": \"johndoe\", \"Authentication\": {\"access_token\": \"eyJhbGciOiJIUzI1...\", \"id_token\": \"eyJraWQiOiJ...\", \"refresh_token\": \"eyJjdHkiOiJKV1Q...\", \"expires_in\": \"3600\"}}"
+}

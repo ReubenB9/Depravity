@@ -1,0 +1,5 @@
+{
+    "httpMethod": "POST",
+    "path": "/geo",
+    "body": "{\"latitude\": 36.879163, \"longitude\": 10.243122, \"group\": \"Group1\", \"creator\": \"John Doe\", \"timestamp\": \"2026-05-04T13:56:22Z\", \"Item\": {\"District\": {\"S\": \"Russia\"}, \"Capital\": {\"S\": \"Moscow\"}, \"year\": {\"S\": \"2020\"}}, \"ConditionExpression\": \"attribute_not_exists(hashKey)\"}"
+} 

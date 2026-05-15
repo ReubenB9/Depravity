@@ -1,0 +1,965 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Depravity_Template
+Transform: AWS::Serverless-2016-10-31
+
+# Resources declares the AWS resources that you want to include in the stack
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
+Resources:
+  # Each Lambda function is defined by properties:
+  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+
+  # This is an API gateway associated with the getByIdFunction and putItemFunctions
+
+  # This is a Lambda function config associated with the source code: get-by-id.js
+
+  mainTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+  GeoTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: Hash
+          AttributeType: S
+        - AttributeName: Range
+          AttributeType: 'N'
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: Hash
+          KeyType: HASH
+        - AttributeName: Range
+          KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+  geoPutItemFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: geoPutItemFunction
+      CodeUri: backend/
+      Handler: src/handlers/geo-put-item.geoPutItemHandler
+      Runtime: python3.13
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          GEOTABLE_TABLE_NAME: !Ref GeoTable
+          GEOTABLE_TABLE_ARN: !GetAtt GeoTable.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref GeoTable
+      Events:
+        ApiGatewayApiPOSTgeo:
+          Type: Api
+          Properties:
+            Path: /geo
+            Method: POST
+            RestApiId: !Ref ApiGatewayApi
+  geoPutItemFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${geoPutItemFunction}
+  geoGetItemsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: geoGetItemsFunction
+      CodeUri: backend/
+      Handler: src/handlers/geo-query-rectangle.geoGetQueryHandler
+      Runtime: python3.13
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          GEOTABLE_TABLE_NAME: !Ref GeoTable
+          GEOTABLE_TABLE_ARN: !GetAtt GeoTable.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref GeoTable
+      Events:
+        ApiGatewayApiGETgeo:
+          Type: Api
+          Properties:
+            Path: /geo
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+  geoGetItemsFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${geoGetItemsFunction}
+  geoDeleteItemFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: geoDeleteItemFunction
+      CodeUri: backend/
+      Handler: src/handlers/geo-delete-item.geoDeleteItemHandler
+      Runtime: python3.13
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          GEOTABLE_TABLE_NAME: !Ref GeoTable
+          GEOTABLE_TABLE_ARN: !GetAtt GeoTable.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref GeoTable
+      Events:
+        ApiGatewayApiDELETEgeo:
+          Type: Api
+          Properties:
+            Path: /geo
+            Method: DELETE
+            RestApiId: !Ref ApiGatewayApi
+  geoDeleteItemFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${geoDeleteItemFunction}
+  DepravityUsers:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      AliasAttributes:
+        - email
+        - preferred_username
+      UserPoolName: !Sub ${AWS::StackName}-DepravityUsers
+  geoUpdateItemFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: geoUpdateItemFunction
+      CodeUri: backend/
+      Handler: src/handlers/geo-update-item.geoUpdateItemHandler
+      Runtime: python3.13
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          GEOTABLE_TABLE_NAME: !Ref GeoTable
+          GEOTABLE_TABLE_ARN: !GetAtt GeoTable.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref GeoTable
+      Events:
+        ApiGatewayApiPUTgeo:
+          Type: Api
+          Properties:
+            Path: /geo
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+  geoUpdateItemFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${geoUpdateItemFunction}
+  ApiCognitoApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub
+        - ${ResourceName} From Stack ${AWS::StackName}
+        - ResourceName: ApiCognitoApi
+      StageName: Prod
+      DefinitionBody:
+        openapi: '3.0'
+        info: {}
+        paths:
+          /signup:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${loginSignUpUserFunction.Arn}/invocations
+              responses: {}
+          /confirm-signup:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${loginConfirmSignUpFunction.Arn}/invocations
+              responses: {}
+          /forgot-password:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${loginForgotPasswordFunction.Arn}/invocations
+              responses: {}
+          /confirm-forgot-password:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${loginConfirmForgotPasswordFunction.Arn}/invocations
+              responses: {}
+          /login:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${loginLoginFunction.Arn}/invocations
+              responses: {}
+          /resend-confirmation-code:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${loginResendConfirmationCodeFunction.Arn}/invocations
+              responses: {}
+          /add-user-permissions:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${loginAddUserPermissionsFunction.Arn}/invocations
+              responses: {}
+          /generate-certificate:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${loginGenerateCertificateFunction.Arn}/invocations
+              responses: {}
+      EndpointConfiguration: REGIONAL
+      TracingEnabled: true
+      Cors:
+        MaxAge: 5
+        AllowMethods: '''GET, POST'''
+  loginSignUpUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: loginSignUpUserFunction
+      CodeUri: backend/
+      Handler: src/handlers/login/sign-up-user.signUpUserHandler
+      Runtime: python3.13
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          DEPRAVITYUSERS_USER_POOL_ID: !Ref DepravityUsers
+          DEPRAVITYUSERS_USER_POOL_ARN: !GetAtt DepravityUsers.Arn
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:Admin*
+                - cognito-idp:DescribeIdentityProvider
+                - cognito-idp:DescribeResourceServer
+                - cognito-idp:DescribeUserPool
+                - cognito-idp:DescribeUserPoolClient
+                - cognito-idp:DescribeUserPoolDomain
+                - cognito-idp:GetGroup
+                - cognito-idp:ListGroups
+                - cognito-idp:ListUserPoolClients
+                - cognito-idp:ListUsers
+                - cognito-idp:ListUsersInGroup
+                - cognito-idp:UpdateGroup
+              Resource: !GetAtt DepravityUsers.Arn
+      Events:
+        ApiCognitoApiPOSTsignup:
+          Type: Api
+          Properties:
+            Path: /signup
+            Method: POST
+            RestApiId: !Ref ApiCognitoApi
+  loginSignUpUserFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${loginSignUpUserFunction}
+  loginConfirmSignUpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: loginConfirmSignUpFunction
+      CodeUri: backend/
+      Handler: src/handlers/login/confirm-sign-up.confirmSignUpHandler
+      Runtime: python3.13
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          DEPRAVITYUSERS_USER_POOL_ID: !Ref DepravityUsers
+          DEPRAVITYUSERS_USER_POOL_ARN: !GetAtt DepravityUsers.Arn
+          DEPRAVITYUSERS_USER_POOL_ID_2: !Ref DepravityUsers
+          DEPRAVITYUSERS_USER_POOL_ARN_2: !GetAtt DepravityUsers.Arn
+      Events:
+        ApiCognitoApiPOSTconfirmsignup:
+          Type: Api
+          Properties:
+            Path: /confirm-signup
+            Method: POST
+            RestApiId: !Ref ApiCognitoApi
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:Admin*
+                - cognito-idp:DescribeIdentityProvider
+                - cognito-idp:DescribeResourceServer
+                - cognito-idp:DescribeUserPool
+                - cognito-idp:DescribeUserPoolClient
+                - cognito-idp:DescribeUserPoolDomain
+                - cognito-idp:GetGroup
+                - cognito-idp:ListGroups
+                - cognito-idp:ListUserPoolClients
+                - cognito-idp:ListUsers
+                - cognito-idp:ListUsersInGroup
+                - cognito-idp:UpdateGroup
+              Resource: !GetAtt DepravityUsers.Arn
+        - LambdaInvokePolicy:
+            FunctionName: !Ref loginAddUserPermissionsFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref loginGenerateCertificateFunction
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:Admin*
+                - cognito-idp:DescribeIdentityProvider
+                - cognito-idp:DescribeResourceServer
+                - cognito-idp:DescribeUserPool
+                - cognito-idp:DescribeUserPoolClient
+                - cognito-idp:DescribeUserPoolDomain
+                - cognito-idp:GetGroup
+                - cognito-idp:ListGroups
+                - cognito-idp:ListUserPoolClients
+                - cognito-idp:ListUsers
+                - cognito-idp:ListUsersInGroup
+                - cognito-idp:UpdateGroup
+              Resource: !GetAtt DepravityUsers.Arn
+        - LambdaInvokePolicy:
+            FunctionName: !Ref loginAddUserPermissionsFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref loginGenerateCertificateFunction
+  loginConfirmSignUpFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${loginConfirmSignUpFunction}
+  loginForgotPasswordFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: loginForgotPasswordFunction
+      CodeUri: backend/
+      Handler: src/handlers/login/forgot-password.forgotPasswordHandler
+      Runtime: python3.13
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          DEPRAVITYUSERS_USER_POOL_ID: !Ref DepravityUsers
+          DEPRAVITYUSERS_USER_POOL_ARN: !GetAtt DepravityUsers.Arn
+      Events:
+        ApiCognitoApiPOSTforgotpassword:
+          Type: Api
+          Properties:
+            Path: /forgot-password
+            Method: POST
+            RestApiId: !Ref ApiCognitoApi
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:Admin*
+                - cognito-idp:DescribeIdentityProvider
+                - cognito-idp:DescribeResourceServer
+                - cognito-idp:DescribeUserPool
+                - cognito-idp:DescribeUserPoolClient
+                - cognito-idp:DescribeUserPoolDomain
+                - cognito-idp:GetGroup
+                - cognito-idp:ListGroups
+                - cognito-idp:ListUserPoolClients
+                - cognito-idp:ListUsers
+                - cognito-idp:ListUsersInGroup
+                - cognito-idp:UpdateGroup
+              Resource: !GetAtt DepravityUsers.Arn
+        - LambdaInvokePolicy:
+            FunctionName: !Ref loginAddUserPermissionsFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref loginGenerateCertificateFunction
+  loginForgotPasswordFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${loginForgotPasswordFunction}
+  loginConfirmForgotPasswordFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: loginConfirmForgotPasswordFunction
+      CodeUri: backend/
+      Handler: src/handlers/login/confirm-forgot-password.confirmForgotPasswordHandler
+      Runtime: python3.13
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          DEPRAVITYUSERS_USER_POOL_ID: !Ref DepravityUsers
+          DEPRAVITYUSERS_USER_POOL_ARN: !GetAtt DepravityUsers.Arn
+      Events:
+        ApiCognitoApiPOSTconfirmforgotpassword:
+          Type: Api
+          Properties:
+            Path: /confirm-forgot-password
+            Method: POST
+            RestApiId: !Ref ApiCognitoApi
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:Admin*
+                - cognito-idp:DescribeIdentityProvider
+                - cognito-idp:DescribeResourceServer
+                - cognito-idp:DescribeUserPool
+                - cognito-idp:DescribeUserPoolClient
+                - cognito-idp:DescribeUserPoolDomain
+                - cognito-idp:GetGroup
+                - cognito-idp:ListGroups
+                - cognito-idp:ListUserPoolClients
+                - cognito-idp:ListUsers
+                - cognito-idp:ListUsersInGroup
+                - cognito-idp:UpdateGroup
+              Resource: !GetAtt DepravityUsers.Arn
+  loginConfirmForgotPasswordFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${loginConfirmForgotPasswordFunction}
+  loginLoginFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: loginLoginFunction
+      CodeUri: backend/
+      Handler: src/handlers/login/login.loginHandler
+      Runtime: python3.13
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          DEPRAVITYUSERS_USER_POOL_ID: !Ref DepravityUsers
+          DEPRAVITYUSERS_USER_POOL_ARN: !GetAtt DepravityUsers.Arn
+      Events:
+        ApiCognitoApiPOSTlogin:
+          Type: Api
+          Properties:
+            Path: /login
+            Method: POST
+            RestApiId: !Ref ApiCognitoApi
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:Admin*
+                - cognito-idp:DescribeIdentityProvider
+                - cognito-idp:DescribeResourceServer
+                - cognito-idp:DescribeUserPool
+                - cognito-idp:DescribeUserPoolClient
+                - cognito-idp:DescribeUserPoolDomain
+                - cognito-idp:GetGroup
+                - cognito-idp:ListGroups
+                - cognito-idp:ListUserPoolClients
+                - cognito-idp:ListUsers
+                - cognito-idp:ListUsersInGroup
+                - cognito-idp:UpdateGroup
+              Resource: !GetAtt DepravityUsers.Arn
+  loginLoginFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${loginLoginFunction}
+  loginResendConfirmationCodeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: loginResendConfirmationCodeFunction
+      CodeUri: backend/
+      Handler: src/handlers/login/resend-confirmation-code.resendConfirmationCodeHandler
+      Runtime: python3.13
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          DEPRAVITYUSERS_USER_POOL_ID: !Ref DepravityUsers
+          DEPRAVITYUSERS_USER_POOL_ARN: !GetAtt DepravityUsers.Arn
+      Events:
+        ApiCognitoApiPOSTresendconfirmationcode:
+          Type: Api
+          Properties:
+            Path: /resend-confirmation-code
+            Method: POST
+            RestApiId: !Ref ApiCognitoApi
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:Admin*
+                - cognito-idp:DescribeIdentityProvider
+                - cognito-idp:DescribeResourceServer
+                - cognito-idp:DescribeUserPool
+                - cognito-idp:DescribeUserPoolClient
+                - cognito-idp:DescribeUserPoolDomain
+                - cognito-idp:GetGroup
+                - cognito-idp:ListGroups
+                - cognito-idp:ListUserPoolClients
+                - cognito-idp:ListUsers
+                - cognito-idp:ListUsersInGroup
+                - cognito-idp:UpdateGroup
+              Resource: !GetAtt DepravityUsers.Arn
+  loginResendConfirmationCodeFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${loginResendConfirmationCodeFunction}
+  loginAddUserPermissionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: loginAddUserPermissionsFunction
+      CodeUri: backend/
+      Handler: src/handlers/login/add-user-permissions.addUserPermissionsHandler
+      Runtime: python3.13
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          DEPRAVITYUSERS_USER_POOL_ID: !Ref DepravityUsers
+          DEPRAVITYUSERS_USER_POOL_ARN: !GetAtt DepravityUsers.Arn
+      Events:
+        ApiCognitoApiPOSTadduserpermissions:
+          Type: Api
+          Properties:
+            Path: /add-user-permissions
+            Method: POST
+            RestApiId: !Ref ApiCognitoApi
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:Admin*
+                - cognito-idp:DescribeIdentityProvider
+                - cognito-idp:DescribeResourceServer
+                - cognito-idp:DescribeUserPool
+                - cognito-idp:DescribeUserPoolClient
+                - cognito-idp:DescribeUserPoolDomain
+                - cognito-idp:GetGroup
+                - cognito-idp:ListGroups
+                - cognito-idp:ListUserPoolClients
+                - cognito-idp:ListUsers
+                - cognito-idp:ListUsersInGroup
+                - cognito-idp:UpdateGroup
+              Resource: !GetAtt DepravityUsers.Arn
+  loginAddUserPermissionsFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${loginAddUserPermissionsFunction}
+  loginGenerateCertificateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: loginGenerateCertificateFunction
+      CodeUri: backend/
+      Handler: src/handlers/login/generate-certificate.generateCertificateHandler
+      Runtime: python3.13
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          DEPRAVITYUSERS_USER_POOL_ID: !Ref DepravityUsers
+          DEPRAVITYUSERS_USER_POOL_ARN: !GetAtt DepravityUsers.Arn
+      Events:
+        ApiCognitoApiPOSTgeneratecertificate:
+          Type: Api
+          Properties:
+            Path: /generate-certificate
+            Method: POST
+            RestApiId: !Ref ApiCognitoApi
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:Admin*
+                - cognito-idp:DescribeIdentityProvider
+                - cognito-idp:DescribeResourceServer
+                - cognito-idp:DescribeUserPool
+                - cognito-idp:DescribeUserPoolClient
+                - cognito-idp:DescribeUserPoolDomain
+                - cognito-idp:GetGroup
+                - cognito-idp:ListGroups
+                - cognito-idp:ListUserPoolClients
+                - cognito-idp:ListUsers
+                - cognito-idp:ListUsersInGroup
+                - cognito-idp:UpdateGroup
+              Resource: !GetAtt DepravityUsers.Arn
+  loginGenerateCertificateFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${loginGenerateCertificateFunction}
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub
+        - ${ResourceName} From Stack ${AWS::StackName}
+        - ResourceName: ApiGatewayApi
+      StageName: Prod
+      DefinitionBody:
+        openapi: '3.0'
+        info: {}
+        paths:
+          /geo:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${geoPutItemFunction.Arn}/invocations
+              responses: {}
+            get:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${geoGetItemsFunction.Arn}/invocations
+              responses: {}
+            put:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${geoUpdateItemFunction.Arn}/invocations
+              responses: {}
+            delete:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${geoDeleteItemFunction.Arn}/invocations
+              responses: {}
+          /users:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${usersPutItemFunction.Arn}/invocations
+              responses: {}
+          /users{id}:
+            get:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${usersGetItemFunction.Arn}/invocations
+              responses: {}
+            patch:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${usersUpdateItemFunction.Arn}/invocations
+              responses: {}
+          /groups:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${groupsPutItemFunction.Arn}/invocations
+              responses: {}
+          /groups/{id}:
+            get:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${groupsGetItemFunction.Arn}/invocations
+              responses: {}
+            delete:
+              responses: {}
+          /users/{id}:
+            delete:
+              responses: {}
+          /users/addgroup/{id}:
+            patch:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${usersAddUserToGroupFunction.Arn}/invocations
+              responses: {}
+      EndpointConfiguration: REGIONAL
+      TracingEnabled: true
+      Auth:
+        Authorizers:
+          DepravityUsers:
+            UserPoolArn: !Sub arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/placeholder
+        DefaultAuthorizer: DepravityUsers
+      Cors:
+        MaxAge: 5
+  # Each Lambda function is defined by properties:
+  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+
+  # This is a Lambda function config associated with the source code: put-item.js
+  usersPutItemFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: src/handlers/main/users/post-user-item.mainPostUserItemHandler
+      Runtime: python3.13
+      MemorySize: 128
+      Timeout: 100
+      Description: A simple example includes a HTTP post method to add one item to a
+        DynamoDB table.
+      Environment:
+        Variables:
+          # Make DynamoDB endpoint accessible as environment variable from function code during execution
+          MAINTABLE_TABLE_NAME: !Ref mainTable
+          MAINTABLE_TABLE_ARN: !GetAtt mainTable.Arn
+      Policies:
+        # Give Create/Read/Update/Delete Permissions to the SampleTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref mainTable
+      Events:
+        ApiGatewayApiPOSTusers:
+          Type: Api
+          Properties:
+            Path: /users
+            Method: POST
+            RestApiId: !Ref ApiGatewayApi
+  usersUpdateItemFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: usersUpdateItemFunction
+      CodeUri: backend/
+      Handler: src/handlers/main/users/update-user-item.usersUpdateItemHandler
+      Runtime: python3.13
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          MAINTABLE_TABLE_NAME: !Ref mainTable
+          MAINTABLE_TABLE_ARN: !GetAtt mainTable.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref mainTable
+      Events:
+        ApiGatewayApiPATCHusersid:
+          Type: Api
+          Properties:
+            Path: /users/{id}
+            Method: PATCH
+            RestApiId: !Ref ApiGatewayApi
+  usersUpdateItemFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${usersUpdateItemFunction}
+  groupsPutItemFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: groupsPutItemFunction
+      CodeUri: backend/
+      Handler: src/handlers/main/groups/post-group-item.groupsPostItemHandler
+      Runtime: python3.13
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          MAINTABLE_TABLE_NAME: !Ref mainTable
+          MAINTABLE_TABLE_ARN: !GetAtt mainTable.Arn
+      Events:
+        ApiGatewayApiPOSTgroups:
+          Type: Api
+          Properties:
+            Path: /groups
+            Method: POST
+            RestApiId: !Ref ApiGatewayApi
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref mainTable
+  groupsPutItemFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${groupsPutItemFunction}
+  usersAddUserToGroupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: usersAddUserToGroupFunction
+      CodeUri: backend/
+      Handler: src/handlers/main/users/add-user-to-group.usersAddUserToGroupHandler
+      Runtime: python3.13
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          MAINTABLE_TABLE_NAME: !Ref mainTable
+          MAINTABLE_TABLE_ARN: !GetAtt mainTable.Arn
+      Events:
+        ApiGatewayApiPATCHusersaddgroupid:
+          Type: Api
+          Properties:
+            Path: /users/addgroup/{id}
+            Method: PATCH
+            RestApiId: !Ref ApiGatewayApi
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref mainTable
+  usersAddUserToGroupFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${usersAddUserToGroupFunction}
+  groupsGetItemFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: groupsGetItemFunction
+      CodeUri: backend/
+      Handler: src/handlers/main/groups/get-item-by-id.groupsGetHandler
+      Runtime: python3.13
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          MAINTABLE_TABLE_NAME: !Ref mainTable
+          MAINTABLE_TABLE_ARN: !GetAtt mainTable.Arn
+      Events:
+        ApiGatewayApiGETgroupsid:
+          Type: Api
+          Properties:
+            Path: /groups/{id}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref mainTable
+  groupsGetItemFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${groupsGetItemFunction}
+  usersGetItemFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: usersGetItemFunction
+      CodeUri: backend/
+      Handler: src/handlers/main/users/get-item-by-id.usersGetItemHandler
+      Runtime: python3.13
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          MAINTABLE_TABLE_NAME: !Ref mainTable
+          MAINTABLE_TABLE_ARN: !GetAtt mainTable.Arn
+      Events:
+        ApiGatewayApiGETusersid:
+          Type: Api
+          Properties:
+            Path: /users{id}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref mainTable
+  usersGetItemFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${usersGetItemFunction}
+Outputs:
+  APIGatewayEndpoint:
+    Description: API Gateway endpoint URL for Prod stage
+    Value: !Sub https://${ApiGatewayApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Environment:
+      Variables:
+        ACCOUNT_ID:
+        LOCAL_ENDPOINT:
+        COGNITO_CLIENT_ID:
+        COGNITO_USER_POOL_ID:
+        # MAIN_TABLE_NAME:
+    LoggingConfig:
+      LogFormat: JSON
+Metadata:
+  AWS::Composer::Groups:
+    Group:
+      Label: mainTableFunctions
+      Members:
+        - mainTable
+        - usersUpdateItemFunction
+        - usersPutItemFunction
+        - groupsPutItemFunction
+        - usersAddUserToGroupFunction
+        - groupsGetItemFunction
+        - usersGetItemFunction
+    Group2:
+      Label: geoTableFunctions
+      Members:
+        - geoPutItemFunction
+        - geoGetItemsFunction
+        - geoUpdateItemFunction
+        - geoDeleteItemFunction
+        - GeoTable
+    Group3:
+      Label: LoginAPIFunctions
+      Members:
+        - loginSignUpUserFunction
+        - loginConfirmSignUpFunction
+        - loginForgotPasswordFunction
+        - loginConfirmForgotPasswordFunction
+        - loginLoginFunction
+        - loginResendConfirmationCodeFunction
+        - loginGenerateCertificateFunction
+        - loginAddUserPermissionsFunction
