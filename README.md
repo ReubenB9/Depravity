@@ -1,86 +1,100 @@
-This application is based around two NoSQL databases; one is a DynamoDB table to store user and group information (put into same table for cost) and the other is a DynamoDB geo table using the DynamoDB Geo library which uses a geohash to make the storing/lookup of location based data more efficient. Database Structures provided below:
+# Depravity - Social App
 
+This application is based around two NoSQL databases, an authentication pool, live features using MQTT protocol and following security best practices being implemented with an AWS backend and a basic react-native frontend. Repo Structure: 
 
-General Information Table (GSI also shown in table)
-PK	            SK	            Other Attributes
-USER#ALICE	      PROFILE#ALICE	{"email": "alice@dev.com"}
-GROUP#ADMIN	      METADATA	      {“policy”: “policy”}
+- `backend` - Code for the application's Lambda functions
+- `events` - Invocation events that you can use to invoke the function
+- `frontend` - Code for application UI
+- `env.json` - A template for env.json file, must be edited with user env variables
+- `template.yaml` - A template that defines the application's AWS resources
 
-Query Structures: PK = USER#123 and SK begins_with(GROUP#)
-Or GSI (for all users in a group): SK = GROUP#ABC and PK begins_with(USER#)
+## Database Structures
+The backend is structured into two NoSQL databasesm, one is a DynamoDB table to store user and group information (put into the same table for cost optimization), and the other is a DynamoDB geo table utilizing the DynamoDB Geo library, which uses a geohash to make the storing and lookup of location-based data more efficient. The first table is structured This second table is specifically designed for holding pin locations to be displayed efficiently on the live map interface. 
 
+### General Information Table (Single-Table Design)
 
-Geo DynamoDB Structure
-PK	      SK	                  Other Point Attributes
-GEOHASH	GROUP-USER-TIMESTAMP	{“description”: “example”}
+| PK | SK | Other Attributes |
+| :--- | :--- | :--- |
+| `USER#ALICE` | `PROFILE#ALICE` | `{"email": "alice@dev.com"}` |
+| `GROUP#ADMIN` | `METADATA` | `{"policy": "policy"}` |
 
-Query Structures: PK = (Coord generated Geohash) and SK = (unique SK within Geohash location)
+**Query Structures:**
+* **Primary:** `PK = USER#123` and `SK begins_with(GROUP#)`
+* **GSI (All users in a group):** `SK = GROUP#ABC` and `PK begins_with(USER#)`
 
+### Geo DynamoDB Structure
 
-Features and Structure
-User & Authentication
-* Secure custom signup/login flow with cognito
-* On Duo cognito approval
-    * Attach user permissions policy
-    * Generate user IoT certificate
-Group Management
-* Create group with
-    * Unique entry code for joining
-    * Unique IoT Core policy for groups users permissions
-* Join group
-    * Verifies entry code
-    * Attaches groups policy to users unique identity pool ID
+| PK | SK | Other Pin Attributes |
+| :--- | :--- | :--- |
+| `GEOHASH` | `GROUP-USER-TIMESTAMP` | `{"description": "example"}` |
+
+**Query Structures:** * `PK = (Coord generated Geohash)` and `SK = (unique SK within Geohash location)`
+
+## Features and Structure
+
+### User & Authentication
+* Secure custom signup/login flow with Cognito (custom backend utilizing Python and the Boto3 SDK)
+* Login API built using API Gateway, included methods for sign up, confirm sign up, login, forgot password, resend confirmation code and adding user permissions
+* On Duo Cognito approval:
+  * Attach user permissions policy
+  * Generate user IoT permissions (policies attached directly to identity pool with dynamic permissions given based on users current group tag)
+  * Permanently add users to dynamodb user base
+
+### Group Management
+* Create a group with:
+  * Unique entry code for joining
+  * Dynamodb for storing group metadata
+* Join a group:
+  * Verifies entry code
+  * Adds group to users list of active 'groups'
 * Invite other users via sharing code or link
-Live Data
-* Publishing live user locations to group topics
-* Subscription to GraphQL in AppSync for receiving user locations
-Frontend (React-Native)
-* Responsive, modern UI built with react-native
-* Dynamic components for live map (react-native-maps)
-Backend (Serverless utilizing AWS Lambda for connecting services)
-* Custom RESTful API endpoints for DynamoDB and AppSync
-* Cognito-based authentication
-* DynamoDB for data storage
-* IoT Core for receiving live data
-* AppSync for pushing live data to users
-* Location Services for processing user locations
-* CloudWatch for live app statistics
-Database (DynamoDB)
-* Horizontal scaling for users and groups
-* Map pins saved with geohashing for quick area querying
-Deployment
-* Complete AWS serverless backend using cognito, IoT Core, Lambda, Location Services, Cloudwatch
-* Frontend built with react native and hosted through App Store and Google Play Store
-Testing and Development
-* Local testing with SAM CLI
+* Dynamic user ability to switch between groups and securely display only current group information
 
-Commands for Local Deployment
-To build and deploy the application for the first time locally, download the git repo and create your own env.json file. Then run the following in your shell:
+### Live Map Data
+## Pipeline
+* User data is published to group topics
+* topic/*GroupName*/location data routed through a lambda function and sent to location services for processing
+* Users subscribe to AppSync via GraphQL to recieve live user location data
 
+## Frontend
+* Map implemented using react open source Leaflet library
+* Dynamic tile based interface with pins and other user locations displayed
+  
+## Testing and Development
+Complete AWS serverless backend utilizing AWS services, frontend to be hosted through the App Store and Google Play Store. Instructions included below for local deployment using AWS SAM and react native expo. SAM has built in deployment functions for moving to a live env. For local deployment you will need Node.js, AWS CLI, SAM CLI, Docker and React-Native-Expo.
+
+### Local Deployment
+To build and deploy the application for the first time locally, clone the repository and create your own `env.json` file. Example `env.json` file is included in the repo
+
+Build the source of your application:
 ```bash
 sam build
 ```
 
-The first command will build the source of your application. Then you can either locally invoke commands using docker instances of AWS DBs or you can deploy databases to test the lambda functions locally in a live environment. If a lambda function relies on invoking other lambda functions locally run the command below to start local instances of lambda. Ensure port is correct in your local env.json.
-
+You can locally invoke commands using Docker instances of AWS databases, or you can deploy databases to test the Lambda functions locally in a live environment. If a Lambda function relies on invoking other Lambda functions locally, start local instances of Lambda (ensure the port is correct in your local `env.json`):
 ```bash
 sam local start-lambda
 ```
 
-Below are local testing commands for the geo lambda functions. Run functions locally and invoke them with the `sam local invoke` command.
+### Geo Lambda Testing
+Run functions locally and invoke them with the `sam local invoke` command. Below are local testing commands for the geo Lambda functions:
 
 ```bash
-my-application$ sam local invoke geoGetItemsFunction --event events/geo-event-query-rectangle.json
-my-application$ sam local invoke geoGetItemsFunction --event events/geo-event-query-rectangle.json
-my-application$ sam local invoke geoPutItemFunction --event events/geo-event-post-item.json
-my-application$ sam local invoke geoUpdateItemFunction --event events/geo-event-update-item.json
-my-application$ sam local invoke geoDeleteItemFunction --event events/geo-event-delete-item.json
+sam local invoke geoGetItemsFunction --event events/geo-event-query-rectangle.json
+sam local invoke geoGetItemsFunction --event events/geo-event-query-rectangle.json
+sam local invoke geoPutItemFunction --event events/geo-event-post-item.json
+sam local invoke geoUpdateItemFunction --event events/geo-event-update-item.json
+sam local invoke geoDeleteItemFunction --event events/geo-event-delete-item.json
 ```
 
-To run the local frontend, cd into the frontend file and run 
+### Frontend Development
+To run the local frontend, navigate into the frontend directory and run:
 ```bash
-npx start run:ios
+npx react-native run-ios
 ```
-for the functions to work properly you will need two local api's running, a lambda api and a api gateway
+*Note: For the functions to work properly in local simulation, you will need two local APIs running: a Lambda API (sam local start-lambda) and an API Gateway (sam local start-api*
 
-README is unfinished, more details coming soon.
+### Features in progress
+* Group trip planning feature orchestrated by an ai model including user surveying, ai generated personalized recommendations and rank choice voting system (include rate limiting and real time usage tracking)
+* User location processing for custom geo fences
+* Live app data metrics with Cloudwatch
