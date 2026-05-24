@@ -1,0 +1,45 @@
+{
+    "getAllItemsFunction": {
+        "ENDPOINT_OVERRIDE": "http://172.17.0.2:8000",
+        "MAINTABLE_TABLE_NAME": "mainTable"
+    },
+    "groupsGetItemFunction": {
+        "ENDPOINT_OVERRIDE": "http://172.17.0.2:8000"
+    },
+    "groupsPutItemFunction": {
+        "ENDPOINT_OVERRIDE": "http://172.17.0.2:8000",
+        "ACCOUNT_ID": "AWS ACCOUNT ID"
+    },
+    "usersGetItemFunction": {
+        "ENDPOINT_OVERRIDE": "http://172.17.0.2:8000"
+    },
+    "loginSignUpUserFunction": {
+        "COGNITO_CLIENT_ID": "INSERT CLIENT ID HERE",
+        "LOCAL_ENDPOINT": "http://host.docker.internal:3001"
+    },
+    "loginConfirmSignUpFunction": {
+        "COGNITO_CLIENT_ID": "INSERT CLIENT ID HERE",
+        "COGNITO_USER_POOL_ID": "INSERT HERE",
+        "LOCAL_ENDPOINT": "http://host.docker.internal:3001"
+    },
+    "loginLoginFunction": {
+        "COGNITO_CLIENT_ID": "INSERT CLIENT ID HERE",
+        "LOCAL_ENDPOINT": "http://host.docker.internal:3001"
+    },
+    "loginResendConfirmationCodeFunction": {
+        "COGNITO_CLIENT_ID": "INSERT CLIENT ID HERE"
+    },
+    "loginForgotPasswordFunction": {
+        "COGNITO_CLIENT_ID": "INSERT CLIENT ID HERE"
+    },
+    "loginConfirmForgotPasswordFunction": {
+        "COGNITO_CLIENT_ID": "INSERT CLIENT ID HERE"
+    },
+    "loginAddUserPermissionsFunction": {
+        "COGNITO_CLIENT_ID": "INSERT CLIENT ID HERE",
+        "COGNITO_USER_POOL_ID": "INSERT HERE"
+    }
+    
+    
+    
+}
