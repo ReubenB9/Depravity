@@ -93,7 +93,7 @@ To run the local frontend, navigate into the frontend directory and run (second 
 npm install
 npx react-native run-ios 
 ```
-*Note: For the functions to work properly in local simulation, you will need two local APIs running: a Lambda API (sam local start-lambda) and an API Gateway (sam local start-api*
+*Note: For the functions to work properly in local simulation, you will need two local APIs running: a Lambda API (sam local start-lambda) and an API Gateway (sam local start-api --env-vars env.json)*
 
 ### Features in progress
 * Group trip planning feature orchestrated by an ai model including user surveying, ai generated personalized recommendations and rank choice voting system (include rate limiting and real time usage tracking)
